@@ -1,0 +1,151 @@
+﻿@page "/locationdetail/{Id:int}"
+@using WarehouseManagement.Models
+@using WarehouseManagement.Services
+@using System
+@inject LocationService LocationService
+@inject NavigationManager NavigationManager
+
+<div class="warehouse-detail-container">
+    @if (location == null)
+    {
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Načítám...</p>
+        </div>
+    }
+    else
+    {
+        <div class="page-header">
+            <div>
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item" @onclick="NavigateBack" style="cursor:pointer">Sklady</span>
+                    <svg class="breadcrumb-arrow" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                    </svg>
+                    <span class="breadcrumb-item current">Lokace @location.Code</span>
+                </div>
+                <h1 class="page-title">@location.Code</h1>
+                    <p class="page-subtitle">@(string.IsNullOrEmpty(location.Description) ? "Detail lokace" : location.Description)</p>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-card-header">
+                    <div class="info-icon warehouse-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/>
+                        </svg>
+                    </div>
+                    <h3>Základní informace</h3>
+                </div>
+                <div class="info-item">
+                    <label>Kód lokace</label>
+                    <span>@location.Code</span>
+                </div>
+                <div class="info-item">
+                    <label>Regál</label>
+                    <span>@(location.Shelf?.Code ?? "Nepřiřazeno")</span>
+                </div>
+                <div class="info-item">
+                    <label>Popis</label>
+                        <span>@(location?.Description ?? "-")</span>
+
+                </div>
+            </div>
+
+            <div class="info-card">
+                <div class="info-card-header">
+                    <div class="info-icon stats-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                        </svg>
+                    </div>
+                    <h3>Statistiky</h3>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-number">@location.Items.Count</span>
+                        <span class="stat-label">Počet položek</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">@location.Items.Sum(i => i.Quantity)</span>
+                        <span class="stat-label">Celkem kusů</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <svg class="section-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    <h2>Položky v lokaci</h2>
+                </div>
+            </div>
+
+            @if (location.Items.Any())
+            {
+                <div class="items-table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Název</th>
+                                <th scope="col">Popis</th>
+                                <th scope="col">Množství</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in location.Items)
+                            {
+                                <tr>
+                                    <td>@item.Name</td>
+                                        <td>@(string.IsNullOrEmpty(item.Description) ? "-" : item.Description)</td>
+                                    <td>@item.Quantity ks</td>
+                          
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                    <h3>Žádné položky</h3>
+                    <p>V této lokaci nejsou žádné položky.</p>
+                </div>
+            }
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 24px;">
+            <button class="btn btn-secondary" @onclick="NavigateBack">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                </svg>
+                Zpět na přehled
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Location? location;
+
+    protected override async Task OnInitializedAsync()
+    {
+        location = await LocationService.GetLocationByIdAsync(Id);
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo("/Warehouses");
+    }
+}

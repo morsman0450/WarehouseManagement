@@ -1,0 +1,364 @@
+﻿@page "/warehousedetail/{Id:int}"
+@using Microsoft.EntityFrameworkCore
+@using WarehouseManagement.Models
+@using WarehouseManagement.Services
+@inject WarehouseService WarehouseService
+@inject NavigationManager NavigationManager
+@inject ShelfService ShelfService
+@inject LocationService LocationService 
+@inject IJSRuntime JSRuntime  
+
+
+<div class="warehouse-detail-container">
+    @if (warehouse == null)
+    {
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Načítám data skladu...</p>
+        </div>
+    }
+    else
+    {
+        <div class="page-header">
+            <div class="header-content">
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item">Sklady</span>
+                    <svg class="breadcrumb-arrow" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                    </svg>
+                    <span class="breadcrumb-item current">@warehouse.Name</span>
+                </div>
+                <h1 class="page-title">@warehouse.Name</h1>
+                <p class="page-subtitle">Detail a správa skladu</p>
+            </div>
+            <button class="btn btn-outline" @onclick="NavigateToWarehouses">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20v-2z"/>
+                </svg>
+                Zpět na seznam
+            </button>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-card-header">
+                    <div class="info-icon warehouse-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
+                    </div>
+                    <h3>Základní informace</h3>
+                </div>
+                <div class="info-content">
+                    <div class="info-item">
+                        <label>Název skladu</label>
+                        <span>@warehouse.Name</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Popis</label>
+                        <span>@(warehouse.Description ?? "Bez popisu")</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <div class="info-card-header">
+                    <div class="info-icon stats-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                        </svg>
+                    </div>
+                    <h3>Statistiky</h3>
+                </div>
+                <div class="info-content">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-number">@(warehouse.Shelves?.Count ?? 0)</span>
+                            <span class="stat-label">Regálů</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">@(warehouse.Shelves?.Sum(s => s.Locations?.Count ?? 0) ?? 0)</span>
+                            <span class="stat-label">Lokací</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <svg class="section-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/>
+                    </svg>
+                    <h2>Správa regálů</h2>
+                </div>
+                
+                <div class="add-shelf-container">
+                    <div class="input-group">
+                        <input class="form-input" @bind="newShelf.Code" placeholder="Kód regálu (např. A1)" />
+                        <input class="form-input" @bind="newShelf.Description" placeholder="Popis regálu" />
+                        <button class="btn btn-primary" @onclick="AddShelf">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            Přidat regál
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            @if (warehouse.Shelves != null && warehouse.Shelves.Any())
+            {
+                <div class="shelves-grid">
+                    @foreach (var shelf in warehouse.Shelves)
+                    {
+                        <div class="shelf-card @((editingShelf?.Id == shelf.Id) ? "editing" : "")">
+                            <div class="shelf-header">
+                                @if (editingShelf != null && editingShelf.Id == shelf.Id)
+                                {
+                                    <div class="edit-form">
+                                        <div class="form-group">
+                                            <label>Kód regálu</label>
+                                            <input class="form-input" @bind="editingShelf.Code" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Popis</label>
+                                            <input class="form-input" @bind="editingShelf.Description" />
+                                        </div>
+                                        <div class="edit-actions">
+                                            <button class="btn btn-success btn-sm" @onclick="SaveShelfEdit">
+                                                <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                                                </svg>
+                                                Uložit
+                                            </button>
+                                            <button class="btn btn-outline btn-sm" @onclick="CancelShelfEdit">
+                                                <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+                                                </svg>
+                                                Zrušit
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="shelf-info">
+                                        <div class="shelf-badge">@shelf.Code</div>
+                                        <h4 class="shelf-title">@shelf.Description</h4>
+                                        <p class="shelf-meta">@shelf.Locations.Count lokací</p>
+                                    </div>
+                                    <div class="shelf-actions">
+                                        <button class="btn-icon" @onclick="() => EditShelf(shelf)" title="Upravit regál">
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                            </svg>
+                                        </button>
+                                        <button class="btn-icon btn-danger" @onclick="() => ConfirmDeleteShelf(shelf.Id)" title="Smazat regál">
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="locations-section">
+                                <details class="locations-accordion">
+                                    <summary class="locations-summary">
+                                        <svg class="summary-icon" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                                        </svg>
+                                        <span>Lokace (@shelf.Locations.Count)</span>
+                                        <svg class="chevron" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                                        </svg>
+                                    </summary>
+                                    
+                                    <div class="locations-content">
+                                        @if (shelf.Locations.Any())
+                                        {
+                                            <div class="locations-list">
+                                                @foreach (var location in shelf.Locations)
+                                                {
+                                                    <div class="location-item">
+                                                        <div class="location-info">
+                                                        <span class="location-code">@location.Code</span>
+                                                        @if (!string.IsNullOrEmpty(location.Description))
+                                                        {
+                                                            <span class="location-desc">@location.Description</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="location-desc text-muted">(bez popisu)</span>
+                                                        }
+                                                    </div>
+                                                        <div class="location-actions">
+                                                            <a href="/locationdetail/@location.Id" class="location-link">
+                                                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                                                            </a>
+                                                            <button class="btn-icon btn-danger" @onclick="() => DeleteLocation(location.Id)" title="Smazat lokaci">
+                                                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="empty-locations">
+                                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                                </svg>
+                                                <p>Žádné lokace</p>
+                                            </div>
+                                        }
+
+                                        <div class="add-location-form">
+                                            <h5>Přidat novou lokaci</h5>
+                                            <div class="location-input-group">
+                                                <div class="auto-code-notice">
+                                                    Kód bude vygenerován automaticky (A1-01, A1-02, ...)
+                                                </div>
+                                                <input class="form-input" 
+                                                       placeholder="Popis (volitelný)" 
+                                                       @bind="newLocation.Description" />
+                                                <button class="btn btn-primary btn-sm" @onclick="() => AddLocation(shelf.Id)">
+                                                    <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                                                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                                                    </svg>
+                                                    Přidat
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                    <h3>Žádné regály</h3>
+                    <p>V tomto skladu zatím nejsou žádné regály. Začněte přidáním prvního regálu.</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Location newLocation = new();
+    private Warehouse? warehouse;
+    private List<Shelf> shelves = new();
+    private Shelf newShelf = new();
+    private Shelf? editingShelf;
+
+    protected override async Task OnInitializedAsync()
+    {
+        warehouse = await WarehouseService.GetWarehouseByIdAsync(Id);
+    }
+
+    private void NavigateToWarehouses()
+    {
+        NavigationManager.NavigateTo($"/warehouses");
+    }
+
+    async Task ConfirmDeleteShelf(int id)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "Opravdu chcete smazat tento regál?"))
+        {
+            await DeleteShelf(id);
+        }
+    }
+
+    private async Task AddShelf()
+    {
+        if (string.IsNullOrWhiteSpace(newShelf.Code)) return;
+
+        newShelf.WarehouseId = Id;
+        await ShelfService.AddShelfAsync(newShelf);
+        newShelf = new();
+        warehouse = await WarehouseService.GetWarehouseByIdAsync(Id);
+    }
+
+    async Task AddLocation(int shelfId)
+{
+    
+        var createdLocation = await LocationService.CreateLocationAsync(
+            shelfId, 
+            newLocation.Description
+        );
+
+        newLocation = new Location();
+    
+   
+}
+   private async Task DeleteLocation(int locationId)
+{
+    try
+    {
+        await LocationService.DeleteLocationAsync(locationId);
+        
+        var shelfWithLocation = warehouse.Shelves
+            .FirstOrDefault(s => s.Locations.Any(l => l.Id == locationId));
+        
+        if (shelfWithLocation != null)
+        {
+            var locationToRemove = shelfWithLocation.Locations
+                .FirstOrDefault(l => l.Id == locationId);
+                
+            if (locationToRemove != null)
+            {
+                shelfWithLocation.Locations.Remove(locationToRemove);
+                StateHasChanged(); 
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Chyba při mazání lokace: {ex.Message}");
+    }
+}
+
+    private void EditShelf(Shelf shelf)
+    {
+        editingShelf = new Shelf
+        {
+            Id = shelf.Id,
+            Code = shelf.Code,
+            Description = shelf.Description,
+            WarehouseId = shelf.WarehouseId
+        };
+    }
+
+    private async Task SaveShelfEdit()
+    {
+        if (editingShelf != null)
+        {
+            await ShelfService.UpdateShelfAsync(editingShelf);
+            editingShelf = null;
+            warehouse = await WarehouseService.GetWarehouseByIdAsync(Id);
+        }
+    }
+
+    private async Task DeleteShelf(int id)
+    {
+        await ShelfService.DeleteShelfAsync(id);
+        warehouse = await WarehouseService.GetWarehouseByIdAsync(Id);
+    }
+
+    private void CancelShelfEdit()
+    {
+        editingShelf = null;
+    }
+}

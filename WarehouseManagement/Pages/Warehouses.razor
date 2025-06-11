@@ -1,0 +1,122 @@
+﻿@page "/"
+@page "/warehouses"
+@using WarehouseManagement.Models
+@using WarehouseManagement.Services
+@inject WarehouseService WarehouseService
+@inject NavigationManager NavigationManager
+
+<div class="warehouses-container">
+    <h3 class="page-title">Správa skladů</h3>
+
+    <div class="add-warehouse-form">
+        <h4>Přidat nový sklad</h4>
+        <div class="form-group">
+            <input class="form-input" @bind="newWarehouse.Name" placeholder="Název skladu" />
+            <input class="form-input" @bind="newWarehouse.Description" placeholder="Popis" />
+            <button class="btn btn-primary" @onclick="AddWarehouse">
+                <span class="icon">+</span> Přidat sklad
+            </button>
+        </div>
+    </div>
+
+    <div class="warehouses-list">
+        <h4>Seznam skladů</h4>
+        @if (warehouses.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Žádné sklady nebyly nalezeny.</p>
+            </div>
+        }
+        else
+        {
+            <div class="warehouse-cards">
+                @foreach (var warehouse in warehouses)
+                {
+                    <div class="warehouse-card">
+                        <div class="warehouse-header">
+                            <h5 class="warehouse-name">@warehouse.Name</h5>
+                            <div class="warehouse-actions">
+                                <button class="btn-icon" @onclick="() => EditWarehouse(warehouse)" title="Upravit">
+                                    <span class="icon">✏️</span>
+                                </button>
+                                <button class="btn-icon btn-danger" @onclick="() => DeleteWarehouse(warehouse.Id)" title="Smazat">
+                                    <span class="icon">🗑️</span>
+                                </button>
+                                <button class="btn-icon btn-info" @onclick="() => WarehouseDetail(warehouse.Id)" title="Detail">
+                                    <span class="icon">📄</span>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="warehouse-description">@warehouse.Description</p>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (editingWarehouse != null)
+    {
+        <div class="edit-modal">
+            <div class="modal-content">
+                <h4>Úprava skladu</h4>
+                <div class="form-group">
+                    <input class="form-input" @bind="editingWarehouse.Name" />
+                    <input class="form-input" @bind="editingWarehouse.Description" />
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" @onclick="SaveEdit">Uložit změny</button>
+                    <button class="btn btn-secondary" @onclick="() => editingWarehouse = null">Zrušit</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Warehouse> warehouses = new();
+    private Warehouse newWarehouse = new();
+    private Warehouse? editingWarehouse;
+
+    protected override async Task OnInitializedAsync()
+    {
+        warehouses = await WarehouseService.GetWarehouseAllAsync();
+    }
+
+    private async Task AddWarehouse()
+    {
+        await WarehouseService.AddWarehouseAsync(newWarehouse);
+        newWarehouse = new();
+        warehouses = await WarehouseService.GetWarehouseAllAsync();
+    }
+
+    private void EditWarehouse(Warehouse warehouse)
+    {
+        editingWarehouse = new Warehouse
+        {
+            Id = warehouse.Id,
+            Name = warehouse.Name,
+            Description = warehouse.Description
+        };
+    }
+
+    private async Task SaveEdit()
+    {
+        if (editingWarehouse != null)
+        {
+            await WarehouseService.UpdateWarehouseAsync(editingWarehouse);
+            editingWarehouse = null;
+            warehouses = await WarehouseService.GetWarehouseAllAsync();
+        }
+    }
+
+    private void WarehouseDetail(int id)
+    {
+        NavigationManager.NavigateTo($"/warehousedetail/{id}");
+    }
+
+    private async Task DeleteWarehouse(int id)
+    {
+        await WarehouseService.DeleteWarehouseAsync(id);
+        warehouses = await WarehouseService.GetWarehouseAllAsync();
+    }
+}

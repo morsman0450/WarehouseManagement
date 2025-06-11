@@ -1,0 +1,266 @@
+﻿@page "/items"
+@using WarehouseManagement.Models
+@using WarehouseManagement.Services
+@inject ItemService ItemService
+@inject WarehouseService WarehouseService
+
+<div class="items-container">
+    <h3>Správa zboží</h3>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-info">@message</div>
+    }
+
+    <div class="add-item-form">
+        <h4>Přidat nové zboží</h4>
+        <div class="form-group">
+            <input class="form-input" @bind="newItem.Name" placeholder="Jméno položky" />
+            <input class="form-input" @bind="newItem.Description" placeholder="Popis" />
+            <input class="form-input" type="number" @bind="newItem.Quantity" placeholder="Množství" />
+
+            <select class="form-select" @bind="newItem.SelectedLocationId">
+                <option value="0">Vyberte lokaci</option>
+                @foreach (var location in availableLocations)
+                {
+                    <option value="@location.Id">@location.Code - @location.Description</option>
+                }
+            </select>
+
+            <button class="btn btn-primary" @onclick="AddItem">
+                <span class="icon">+</span> Přidat zboží
+            </button>
+        </div>
+    </div>
+
+    <div class="filter-section">
+    <label for="warehouseFilter">Filtrovat podle skladu:</label>
+        <select class="form-select" @onchange="OnWarehouseFilterChanged">
+            <option value="0">Všechny sklady</option>
+            @foreach (var wh in warehouses)
+            {
+                <option value="@wh.Id">@wh.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="items-list">
+        <h4>Seznam zboží</h4>
+
+        @if (items == null)
+        {
+            <div class="loading-state">
+                <p>Načítání...</p>
+            </div>
+        }
+        else if (!items.Any())
+        {
+            <div class="empty-state">
+                <p>Žádné záznamy nebyly nalezeny.</p>
+            </div>
+        }
+        else
+        {
+            <div class="items-table-container">
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Název</th>
+                            <th>Popis</th>
+                            <th>Množství</th>
+                            <th>Lokace</th>
+                            <th>Nová lokace</th>
+                            <th>Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in items)
+                        {
+                            <tr>
+                                @if (editingItem != null && editingItem.Id == item.Id)
+                                {
+                                    <td>@editingItem.Id</td>
+                                    <td><input class="form-input" @bind="editingItem.Name" /></td>
+                                    <td><input class="form-input" @bind="editingItem.Description" /></td>
+                                    <td><input class="form-input" type="number" @bind="editingItem.Quantity" /></td>
+                                    <td colspan="2">
+                                        @locations.FirstOrDefault(l => l.Id == item.LocationId)?.Code
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-success" @onclick="SaveItemEdit">
+                                            <span class="icon">✓</span> Uložit
+                                        </button>
+                                        <button class="btn btn-secondary" @onclick="CancelItemEdit">
+                                            <span class="icon">✕</span> Zrušit
+                                        </button>
+                                    </td>
+                                }
+                                else
+                                {
+                                    <td>@item.Id</td>
+                                    <td>@item.Name</td>
+                                    <td>@item.Description</td>
+                                    <td>@item.Quantity</td>
+                                    <td>
+                                        @locations.FirstOrDefault(l => l.Id == item.LocationId)?.Code
+                                    </td>
+                                    <td>
+                                        <select class="form-select" @onchange="e => OnWarehouseSelected(item, int.Parse(e.Value.ToString()))">
+                                            <option value="">Vyber sklad</option>
+                                            @foreach (var wh in warehouses)
+                                            {
+                                                <option value="@wh.Id">@wh.Name</option>
+                                            }
+                                        </select>
+                                        <select class="form-select" @bind="item.NewLocationId">
+                                            @foreach (var loc in item.AvailableLocations ?? new List<Location>())
+                                            {
+                                                <option value="@loc.Id">@loc.Code</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td class="actions-cell">
+                                        <button class="btn-icon btn-info" @onclick="async () => await MoveItem(item)" title="Přesunout">
+                                            <span class="icon">⇄</span>
+                                        </button>
+                                        <button class="btn-icon" @onclick="() => EditItem(item)" title="Upravit">
+                                            <span class="icon">✏️</span>
+                                        </button>
+                                        <button class="btn-icon btn-danger" @onclick="() => DeleteItem(item.Id)" title="Smazat">
+                                            <span class="icon">🗑️</span>
+                                        </button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+
+@code {
+    private List<Item> items;
+    private List<Location> locations;
+    private List<Location> availableLocations = new();
+    private int selectedWarehouseId = 0;
+
+    private string? message;
+    private Item newItem = new();
+    private Item? editingItem;
+    private List<Warehouse> warehouses = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        items = await ItemService.GetAllAsync();
+        locations = await ItemService.GetAllLocationsAsync();
+        warehouses = await WarehouseService.GetWarehouseAllAsync();
+        availableLocations = await ItemService.GetAllLocationsAsync();
+
+
+        foreach (var item in items)
+        {
+            item.NewLocationId = item.LocationId;
+        }
+    }
+
+    private async Task OnWarehouseSelected(Item item, int warehouseId)
+    {
+        var locs = await ItemService.GetLocationsByWarehouseAsync(warehouseId);
+        item.AvailableLocations = locs;
+        item.NewLocationId = locs.FirstOrDefault()?.Id;
+        StateHasChanged();
+    }
+
+    private void EditItem(Item item)
+    {
+        editingItem = new Item
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Description = item.Description,
+            Quantity = item.Quantity,
+            LocationId = item.LocationId
+        };
+    }
+
+    private async Task SaveItemEdit()
+    {
+        if (editingItem != null)
+        {
+            await ItemService.UpdateItemAsync(editingItem);
+            editingItem = null;
+            items = await ItemService.GetAllAsync();
+        }
+    }
+
+    private void CancelItemEdit()
+    {
+        editingItem = null;
+    }
+
+    private async Task MoveItem(Item item)
+    {
+        try
+        {
+            if (item.NewLocationId != null && item.NewLocationId != item.LocationId)
+            {
+                await ItemService.MoveItemAsync(item.Id, item.NewLocationId.Value);
+                item.LocationId = item.NewLocationId.Value;
+                message = $"Položka {item.Id} úspěšně přesunuta";
+                items = await ItemService.GetAllAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Chyba: {ex.Message}";
+        }
+    }
+
+    private async Task AddItem()
+    {
+        if (newItem.SelectedLocationId == 0)
+        {
+            message = "Vyberte prosím lokaci";
+            return;
+        }
+            await ItemService.AddItemAsync(newItem);
+            newItem = new Item();
+            items = await ItemService.GetAllAsync();
+            message = "Položka úspěšně přidána";
+        
+        
+    }
+
+    private async Task DeleteItem(int id)
+    {
+        await ItemService.DeleteItemAsync(id);
+        items = await ItemService.GetAllAsync();
+        message = "Položka úspěšně smazána";
+    }
+    private async Task OnWarehouseFilterChanged(ChangeEventArgs e)
+    {
+        selectedWarehouseId = int.Parse(e.Value?.ToString() ?? "0");
+
+        if (selectedWarehouseId == 0)
+        {
+            items = await ItemService.GetAllAsync();
+        }
+        else
+        {
+            items = await ItemService.GetItemsByWarehouseAsync(selectedWarehouseId);
+        }
+
+        foreach (var item in items)
+        {
+            item.NewLocationId = item.LocationId;
+        }
+
+        StateHasChanged();
+    }
+
+
+}
